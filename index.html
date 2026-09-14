@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BLE UART WebApp</title>
+  <meta name="description" content="Browser-based serial terminal for BLE devices exposing the Nordic UART Service (NUS), using the Web Bluetooth API." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#128225;</text></svg>" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>
+      <span class="icon" aria-hidden="true">&#128225;</span>
+      BLE UART WebApp
+    </h1>
+    <div id="status" class="status status--disconnected">
+      <span class="status-dot" aria-hidden="true"></span>
+      <span id="status-text">Disconnected</span>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <section class="controls">
+      <button id="connect-btn" class="btn btn--primary" type="button">Connect</button>
+      <button id="disconnect-btn" class="btn btn--danger" type="button" disabled>Disconnect</button>
+      <span class="device-name" id="device-name"></span>
+
+      <div class="controls-right">
+        <label class="checkbox">
+          <input type="checkbox" id="autoscroll-toggle" checked />
+          Autoscroll
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" id="timestamp-toggle" />
+          Timestamps
+        </label>
+        <button id="clear-btn" class="btn btn--ghost" type="button">Clear</button>
+      </div>
+    </section>
+
+    <section class="terminal-wrap">
+      <div id="terminal" class="terminal" role="log" aria-live="polite"></div>
+    </section>
+
+    <form id="send-form" class="send-form" autocomplete="off">
+      <input
+        id="send-input"
+        type="text"
+        placeholder="Type a command or text and press Enter…"
+        disabled
+        aria-label="Message to send"
+      />
+      <label class="checkbox newline-toggle">
+        <input type="checkbox" id="newline-toggle" checked />
+        \n
+      </label>
+      <button id="send-btn" class="btn btn--primary" type="submit" disabled>Send</button>
+    </form>
+
+    <p id="support-warning" class="support-warning" hidden>
+      Your browser does not support the
+      <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Bluetooth_API" target="_blank" rel="noopener">Web Bluetooth API</a>.
+      Please use Chrome, Edge, or Opera on desktop or Android, served over HTTPS (or localhost).
+    </p>
+  </main>
+
+  <footer class="app-footer">
+    <p>
+      Talks to any BLE peripheral exposing the
+      <a href="https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/libraries/bluetooth_services/services/nus.html" target="_blank" rel="noopener">Nordic UART Service (NUS)</a>.
+      No installation, no backend &mdash; everything runs locally in your browser.
+      <a href="https://github.com/Gulash/BLE_UART_WebApp" target="_blank" rel="noopener">Source on GitHub</a>.
+    </p>
+  </footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
