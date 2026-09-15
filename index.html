@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BLE UART WebApp</title>
-  <meta name="description" content="Browser-based serial terminal for BLE devices exposing the Nordic UART Service (NUS), using the Web Bluetooth API." />
+  <meta name="description" content="Browser-based serial terminal for BLE devices using the Nordic UART Service (NUS) or an HM-10 style serial service, via the Web Bluetooth API." />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#128225;</text></svg>" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
@@ -28,6 +28,10 @@
     <section class="controls">
       <button id="connect-btn" class="btn btn--primary" type="button">Connect</button>
       <button id="disconnect-btn" class="btn btn--danger" type="button" disabled>Disconnect</button>
+      <label class="checkbox" title="List every nearby BLE device instead of filtering by service UUID — needed for HM-10 clones that do not advertise theirs.">
+        <input type="checkbox" id="all-devices-toggle" />
+        All devices
+      </label>
       <span class="device-name" id="device-name"></span>
 
       <div class="controls-right">
@@ -73,9 +77,9 @@
 
   <footer class="app-footer">
     <p>
-      Talks to any BLE peripheral exposing the
-      <a href="https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/libraries/bluetooth_services/services/nus.html" target="_blank" rel="noopener">Nordic UART Service (NUS)</a>.
-      No installation, no backend &mdash; everything runs locally in your browser.
+      Talks to BLE peripherals exposing the
+      <a href="https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/libraries/bluetooth_services/services/nus.html" target="_blank" rel="noopener">Nordic UART Service (NUS)</a>
+      or an HM-10 style serial service. No installation, no backend &mdash; everything runs locally in your browser.
       <a href="https://github.com/Gulash/BLE_UART_WebApp" target="_blank" rel="noopener">Source on GitHub</a>.
     </p>
   </footer>

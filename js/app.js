@@ -2,14 +2,31 @@
 
 /**
  * BLE UART WebApp
- * Browser-based serial terminal for BLE peripherals exposing the
- * Nordic UART Service (NUS) via the Web Bluetooth API.
+ * Browser-based serial terminal for BLE peripherals that tunnel a UART
+ * over GATT, via the Web Bluetooth API.
  */
 
-// Nordic UART Service (NUS) UUIDs
-const NUS_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-const NUS_RX_CHAR_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // write: web app -> device
-const NUS_TX_CHAR_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // notify: device -> web app
+/**
+ * Supported UART-over-BLE profiles, probed in this order after connecting.
+ *
+ * NUS uses two characteristics (one written to, one notifying). The HM-10
+ * and its clones use a single characteristic for both directions, so
+ * writeChar and notifyChar are simply the same UUID there.
+ */
+const PROFILES = [
+  {
+    name: "Nordic UART Service",
+    service: "6e400001-b5a3-f393-e0a9-e50e24dcca9e",
+    writeChar: "6e400002-b5a3-f393-e0a9-e50e24dcca9e",
+    notifyChar: "6e400003-b5a3-f393-e0a9-e50e24dcca9e",
+  },
+  {
+    name: "HM-10",
+    service: 0xffe0,
+    writeChar: 0xffe1,
+    notifyChar: 0xffe1,
+  },
+];
 
 // Conservative chunk size for writes (default BLE ATT MTU is 23 bytes,
 // leaving ~20 bytes of payload per write).
@@ -30,6 +47,7 @@ const els = {
   sendBtn: document.getElementById("send-btn"),
   demoStartBtn: document.getElementById("demo-start-btn"),
   demoStopBtn: document.getElementById("demo-stop-btn"),
+  allDevicesToggle: document.getElementById("all-devices-toggle"),
   clearBtn: document.getElementById("clear-btn"),
   autoscrollToggle: document.getElementById("autoscroll-toggle"),
   timestampToggle: document.getElementById("timestamp-toggle"),
@@ -40,8 +58,9 @@ const els = {
 const state = {
   device: null,
   server: null,
-  rxChar: null, // write characteristic
-  txChar: null, // notify characteristic
+  profile: null, // entry from PROFILES that matched the connected device
+  writeChar: null, // web app -> device
+  notifyChar: null, // device -> web app
 };
 
 const demoState = {
@@ -97,8 +116,8 @@ function appendLine(text, kind) {
   }
 }
 
-// Incoming NUS notifications don't guarantee line boundaries, so we
-// buffer bytes and flush on newlines, keeping any partial line pending.
+// Incoming notifications don't guarantee line boundaries, so we buffer
+// bytes and flush on newlines, keeping any partial line pending.
 let rxBuffer = "";
 
 function handleIncomingChunk(chunk) {
@@ -134,16 +153,47 @@ function onDeviceDisconnected() {
 }
 
 function cleanupConnection() {
-  if (state.txChar) {
-    state.txChar.removeEventListener("characteristicvaluechanged", onCharacteristicValueChanged);
+  if (state.notifyChar) {
+    state.notifyChar.removeEventListener("characteristicvaluechanged", onCharacteristicValueChanged);
   }
   if (state.device) {
     state.device.removeEventListener("gattserverdisconnected", onDeviceDisconnected);
   }
   state.device = null;
   state.server = null;
-  state.rxChar = null;
-  state.txChar = null;
+  state.profile = null;
+  state.writeChar = null;
+  state.notifyChar = null;
+}
+
+// Filtering by service UUID keeps the chooser clean, but HM-10 clones often
+// do not advertise their service, so they only show up unfiltered.
+function requestDeviceOptions() {
+  const services = PROFILES.map((profile) => profile.service);
+  if (els.allDevicesToggle.checked) {
+    return { acceptAllDevices: true, optionalServices: services };
+  }
+  return {
+    filters: services.map((service) => ({ services: [service] })),
+    optionalServices: services,
+  };
+}
+
+// Returns the first profile the connected device actually exposes, or null.
+async function resolveProfile(server) {
+  for (const profile of PROFILES) {
+    try {
+      const service = await server.getPrimaryService(profile.service);
+      const [writeChar, notifyChar] = await Promise.all([
+        service.getCharacteristic(profile.writeChar),
+        service.getCharacteristic(profile.notifyChar),
+      ]);
+      return { profile, writeChar, notifyChar };
+    } catch {
+      // Service or characteristic missing — try the next profile.
+    }
+  }
+  return null;
 }
 
 async function connect() {
@@ -156,32 +206,30 @@ async function connect() {
     els.connectBtn.disabled = true;
     appendLine("Requesting Bluetooth device…", "sys");
 
-    const device = await navigator.bluetooth.requestDevice({
-      filters: [{ services: [NUS_SERVICE_UUID] }],
-      optionalServices: [NUS_SERVICE_UUID],
-    });
+    const device = await navigator.bluetooth.requestDevice(requestDeviceOptions());
+    const label = device.name || "Unnamed device";
 
     state.device = device;
     device.addEventListener("gattserverdisconnected", onDeviceDisconnected);
 
-    appendLine(`Connecting to ${device.name || "device"}…`, "sys");
-    const server = await device.gatt.connect();
-    state.server = server;
+    appendLine(`Connecting to ${label}…`, "sys");
+    state.server = await device.gatt.connect();
 
-    const service = await server.getPrimaryService(NUS_SERVICE_UUID);
-    const [rxChar, txChar] = await Promise.all([
-      service.getCharacteristic(NUS_RX_CHAR_UUID),
-      service.getCharacteristic(NUS_TX_CHAR_UUID),
-    ]);
+    const link = await resolveProfile(state.server);
+    if (!link) {
+      device.gatt.disconnect();
+      throw new Error("device exposes neither the Nordic UART Service nor an HM-10 service");
+    }
 
-    state.rxChar = rxChar;
-    state.txChar = txChar;
+    state.profile = link.profile;
+    state.writeChar = link.writeChar;
+    state.notifyChar = link.notifyChar;
 
-    await txChar.startNotifications();
-    txChar.addEventListener("characteristicvaluechanged", onCharacteristicValueChanged);
+    await link.notifyChar.startNotifications();
+    link.notifyChar.addEventListener("characteristicvaluechanged", onCharacteristicValueChanged);
 
-    appendLine(`Connected to ${device.name || "device"}.`, "sys");
-    setConnectedUI(true, device.name || "Unnamed device");
+    appendLine(`Connected to ${label} (${link.profile.name}).`, "sys");
+    setConnectedUI(true, `${label} · ${link.profile.name}`);
   } catch (err) {
     if (err && err.name === "NotFoundError") {
       appendLine("Device selection cancelled.", "sys");
@@ -202,7 +250,7 @@ async function disconnect() {
 }
 
 async function sendText(text) {
-  if (!state.rxChar) return;
+  if (!state.writeChar) return;
 
   const payload = els.newlineToggle.checked ? `${text}\n` : text;
   const bytes = textEncoder.encode(payload);
@@ -210,10 +258,10 @@ async function sendText(text) {
   try {
     for (let offset = 0; offset < bytes.length; offset += WRITE_CHUNK_SIZE) {
       const chunk = bytes.slice(offset, offset + WRITE_CHUNK_SIZE);
-      if (state.rxChar.writeValueWithoutResponse) {
-        await state.rxChar.writeValueWithoutResponse(chunk);
+      if (state.writeChar.writeValueWithoutResponse) {
+        await state.writeChar.writeValueWithoutResponse(chunk);
       } else {
-        await state.rxChar.writeValue(chunk);
+        await state.writeChar.writeValue(chunk);
       }
     }
     appendLine(text, "tx");
@@ -227,7 +275,7 @@ function clearTerminal() {
 }
 
 function startDemo() {
-  if (demoState.intervalId !== null || !state.rxChar) return;
+  if (demoState.intervalId !== null || !state.writeChar) return;
 
   demoState.counter = 0;
   appendLine("Demo started.", "sys");
@@ -247,7 +295,7 @@ function stopDemo() {
   demoState.intervalId = null;
   appendLine("Demo stopped.", "sys");
 
-  els.demoStartBtn.disabled = !state.rxChar;
+  els.demoStartBtn.disabled = !state.writeChar;
   els.demoStopBtn.disabled = true;
 }
 
