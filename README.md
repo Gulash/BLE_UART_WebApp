@@ -15,7 +15,11 @@ hardware.
 - Send text/commands to the device (RX characteristic writes), chunked to
   fit the default BLE ATT MTU
 - Optional timestamps and appended newline on send
+- Built-in demo sender: fires an incrementing message once per second to
+  exercise a link without typing, with a stop button
 - Autoscroll toggle and a one-click clear
+- Installable as a PWA (web app manifest + service worker), so it runs
+  full-screen from the home screen and works offline
 - Zero build step — plain HTML/CSS/JS, works straight from GitHub Pages or
   any static file server
 
@@ -33,6 +37,15 @@ Web Bluetooth is currently supported in Chromium-based browsers
 3. Incoming data from the device appears in the terminal in real time.
 4. Type into the input field and press **Enter** (or click **Send**) to
    write to the device.
+
+## Installing on a phone
+
+Open the live URL in Chrome on Android and choose "Install app" / "Add to
+home screen" — it then launches full-screen without browser chrome and
+loads offline from the service worker cache.
+
+On iOS the page can be added to the home screen too, but Safari does not
+implement Web Bluetooth, so connecting to a device will not work there.
 
 ## Nordic UART Service reference
 
@@ -62,9 +75,12 @@ secure context, so it works without HTTPS locally.
 
 ```
 .
-├── index.html       # markup / layout
-├── css/style.css     # styling (dark terminal theme)
-├── js/app.js         # Web Bluetooth + NUS logic
+├── index.html                   # markup / layout
+├── css/style.css                # styling (dark terminal theme)
+├── js/app.js                    # Web Bluetooth + NUS logic
+├── manifest.json                # PWA manifest
+├── sw.js                        # service worker (network-first, offline fallback)
+├── icons/                       # PWA / home screen icons
 └── .github/workflows/pages.yml  # GitHub Pages deployment
 ```
 
