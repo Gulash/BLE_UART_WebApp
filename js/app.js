@@ -15,6 +15,9 @@ const NUS_TX_CHAR_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // notify: devi
 // leaving ~20 bytes of payload per write).
 const WRITE_CHUNK_SIZE = 20;
 
+// Interval between messages while the demo sender is running.
+const DEMO_INTERVAL_MS = 1000;
+
 const els = {
   connectBtn: document.getElementById("connect-btn"),
   disconnectBtn: document.getElementById("disconnect-btn"),
@@ -25,6 +28,8 @@ const els = {
   sendForm: document.getElementById("send-form"),
   sendInput: document.getElementById("send-input"),
   sendBtn: document.getElementById("send-btn"),
+  demoStartBtn: document.getElementById("demo-start-btn"),
+  demoStopBtn: document.getElementById("demo-stop-btn"),
   clearBtn: document.getElementById("clear-btn"),
   autoscrollToggle: document.getElementById("autoscroll-toggle"),
   timestampToggle: document.getElementById("timestamp-toggle"),
@@ -37,6 +42,11 @@ const state = {
   server: null,
   rxChar: null, // write characteristic
   txChar: null, // notify characteristic
+};
+
+const demoState = {
+  intervalId: null,
+  counter: 0,
 };
 
 const textEncoder = new TextEncoder();
@@ -54,6 +64,8 @@ function setConnectedUI(connected, deviceLabel) {
   els.disconnectBtn.disabled = !connected;
   els.sendInput.disabled = !connected;
   els.sendBtn.disabled = !connected;
+  els.demoStartBtn.disabled = !connected || demoState.intervalId !== null;
+  els.demoStopBtn.disabled = demoState.intervalId === null;
   els.deviceName.textContent = connected && deviceLabel ? deviceLabel : "";
   if (connected) {
     els.sendInput.focus();
@@ -115,6 +127,7 @@ function onCharacteristicValueChanged(event) {
 
 function onDeviceDisconnected() {
   appendLine(`Disconnected from ${state.device ? state.device.name || "device" : "device"}.`, "sys");
+  stopDemo();
   flushRxBuffer();
   cleanupConnection();
   setConnectedUI(false);
@@ -213,8 +226,35 @@ function clearTerminal() {
   els.terminal.innerHTML = "";
 }
 
+function startDemo() {
+  if (demoState.intervalId !== null || !state.rxChar) return;
+
+  demoState.counter = 0;
+  appendLine("Demo started.", "sys");
+  demoState.intervalId = setInterval(() => {
+    demoState.counter += 1;
+    sendText(`Demo message #${demoState.counter}`);
+  }, DEMO_INTERVAL_MS);
+
+  els.demoStartBtn.disabled = true;
+  els.demoStopBtn.disabled = false;
+}
+
+function stopDemo() {
+  if (demoState.intervalId === null) return;
+
+  clearInterval(demoState.intervalId);
+  demoState.intervalId = null;
+  appendLine("Demo stopped.", "sys");
+
+  els.demoStartBtn.disabled = !state.rxChar;
+  els.demoStopBtn.disabled = true;
+}
+
 els.connectBtn.addEventListener("click", connect);
 els.disconnectBtn.addEventListener("click", disconnect);
+els.demoStartBtn.addEventListener("click", startDemo);
+els.demoStopBtn.addEventListener("click", stopDemo);
 els.clearBtn.addEventListener("click", clearTerminal);
 
 els.sendForm.addEventListener("submit", (event) => {
