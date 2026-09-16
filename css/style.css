@@ -229,11 +229,17 @@ body {
 .send-form {
   display: flex;
   align-items: center;
+  /* Wraps rather than pushing the send button off-screen once the input, the
+     line ending selector and the button no longer fit on one line. */
+  flex-wrap: wrap;
   gap: 0.6rem;
 }
 
 .send-form input[type="text"] {
-  flex: 1;
+  /* The basis is wide enough that a narrow screen breaks after the input,
+     leaving the selector and the button together on the second row. */
+  flex: 1 1 16rem;
+  min-width: 0; /* a flex item's default min-width would keep it from shrinking */
   font: inherit;
   font-family: var(--font-mono);
   font-size: 0.9rem;
@@ -251,6 +257,17 @@ body {
 
 .send-form input:disabled {
   opacity: 0.5;
+}
+
+.send-form .btn,
+.line-ending {
+  flex: 0 0 auto;
+}
+
+/* No effect while the input fills the row; on a wrapped row it puts the
+   button at the right edge, under the input. */
+.send-form .btn {
+  margin-left: auto;
 }
 
 .line-ending {
