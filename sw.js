@@ -1,6 +1,11 @@
 "use strict";
 
-const CACHE_NAME = "ble-uart-webapp-v1";
+// Replaced with the commit SHA at deploy time (see .github/workflows/pages.yml)
+// so that every deploy ships a byte-different service worker — otherwise the
+// browser sees no update and offline visitors keep the old precache forever.
+const BUILD_VERSION = "__BUILD_VERSION__";
+
+const CACHE_NAME = `ble-uart-webapp-${BUILD_VERSION}`;
 
 const PRECACHE_URLS = [
   "./",
@@ -13,13 +18,18 @@ const PRECACHE_URLS = [
   "icons/apple-touch-icon.png",
 ];
 
+// Deliberately no skipWaiting() here: a new worker stays in "waiting" until
+// the page asks for it. Taking over mid-session would mean reloading the page
+// to avoid mixing versions, and a reload drops the live BLE connection.
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
-      .then(() => self.skipWaiting())
-  );
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)));
+});
+
+// The page sends this once the user accepts the update.
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("activate", (event) => {

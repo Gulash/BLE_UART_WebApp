@@ -36,6 +36,10 @@ const WRITE_CHUNK_SIZE = 20;
 const DEMO_START_MESSAGE = "demo";
 const DEMO_STOP_MESSAGE = "demo stop";
 
+// How often the page asks the browser to re-check sw.js. Browsers only look
+// for a new worker on navigation, and this app can stay open for days.
+const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+
 // Line endings appended to outgoing messages, keyed by the value of the
 // selector in the send form.
 const LINE_ENDINGS = {
@@ -64,6 +68,10 @@ const els = {
   timestampToggle: document.getElementById("timestamp-toggle"),
   lineEndingSelect: document.getElementById("line-ending-select"),
   supportWarning: document.getElementById("support-warning"),
+  updateBanner: document.getElementById("update-banner"),
+  updateBannerNote: document.getElementById("update-banner-note"),
+  updateReloadBtn: document.getElementById("update-reload-btn"),
+  updateDismissBtn: document.getElementById("update-dismiss-btn"),
 };
 
 const state = {
@@ -81,6 +89,10 @@ function supportsWebBluetooth() {
   return "bluetooth" in navigator;
 }
 
+function isConnected() {
+  return Boolean(state.device && state.device.gatt && state.device.gatt.connected);
+}
+
 function setConnectedUI(connected, deviceLabel) {
   els.status.classList.toggle("status--connected", connected);
   els.status.classList.toggle("status--disconnected", !connected);
@@ -92,6 +104,8 @@ function setConnectedUI(connected, deviceLabel) {
   els.demoStartBtn.disabled = !connected;
   els.demoStopBtn.disabled = !connected;
   els.deviceName.textContent = connected && deviceLabel ? deviceLabel : "";
+  // The update banner warns about losing the link only while there is one.
+  els.updateBannerNote.hidden = !connected;
   if (connected) {
     els.sendInput.focus();
   }
@@ -291,6 +305,82 @@ function sendDemoStop() {
   sendText(DEMO_STOP_MESSAGE);
 }
 
+// --- Service worker updates -------------------------------------------------
+//
+// A new worker installs in the background and then waits. We offer the update
+// instead of applying it silently: activating it means reloading the page to
+// avoid running old page code against new assets, and a reload tears down the
+// BLE connection. So the user picks the moment.
+
+const updateState = {
+  waitingWorker: null,
+  accepted: false,
+  reloading: false,
+};
+
+function showUpdateBanner(worker) {
+  updateState.waitingWorker = worker;
+  els.updateBannerNote.hidden = !isConnected();
+  els.updateReloadBtn.disabled = false;
+  els.updateBanner.hidden = false;
+}
+
+function applyUpdate() {
+  if (!updateState.waitingWorker) return;
+  updateState.accepted = true;
+  els.updateReloadBtn.disabled = true;
+  // The worker calls skipWaiting() and takes over; controllerchange then
+  // reloads the page.
+  updateState.waitingWorker.postMessage({ type: "SKIP_WAITING" });
+}
+
+function dismissUpdate() {
+  els.updateBanner.hidden = true;
+}
+
+function watchForUpdates(registration) {
+  // An update may already be waiting from an earlier visit. A controller means
+  // this page is served by an older worker, so the waiting one is an update
+  // rather than a first install.
+  if (registration.waiting && navigator.serviceWorker.controller) {
+    showUpdateBanner(registration.waiting);
+  }
+
+  registration.addEventListener("updatefound", () => {
+    const installing = registration.installing;
+    if (!installing) return;
+    installing.addEventListener("statechange", () => {
+      if (installing.state === "installed" && navigator.serviceWorker.controller) {
+        showUpdateBanner(installing);
+      }
+    });
+  });
+
+  const checkForUpdate = () => {
+    registration.update().catch(() => {
+      // Offline or the check failed — try again on the next tick.
+    });
+  };
+
+  setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL_MS);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") checkForUpdate();
+  });
+}
+
+async function registerServiceWorker() {
+  try {
+    // updateViaCache: "none" keeps an HTTP-cached sw.js from masking a deploy.
+    const registration = await navigator.serviceWorker.register("sw.js", { updateViaCache: "none" });
+    watchForUpdates(registration);
+  } catch (err) {
+    console.warn("Service worker registration failed:", err);
+  }
+}
+
+els.updateReloadBtn.addEventListener("click", applyUpdate);
+els.updateDismissBtn.addEventListener("click", dismissUpdate);
+
 els.connectBtn.addEventListener("click", connect);
 els.disconnectBtn.addEventListener("click", disconnect);
 els.demoStartBtn.addEventListener("click", sendDemoStart);
@@ -311,9 +401,13 @@ if (!supportsWebBluetooth()) {
 }
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch((err) => {
-      console.warn("Service worker registration failed:", err);
-    });
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    // The first worker claiming this page fires this too — only a reload that
+    // the user asked for should go through, and only once.
+    if (!updateState.accepted || updateState.reloading) return;
+    updateState.reloading = true;
+    window.location.reload();
   });
+
+  window.addEventListener("load", registerServiceWorker);
 }

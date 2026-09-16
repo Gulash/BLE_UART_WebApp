@@ -21,6 +21,9 @@ hardware.
 - Autoscroll toggle and a one-click clear
 - Installable as a PWA (web app manifest + service worker), so it runs
   full-screen from the home screen and works offline
+- Update prompt instead of a silent takeover: a new version installs in the
+  background and is applied when you press Reload, so an update never drops a
+  live BLE connection behind your back
 - Zero build step — plain HTML/CSS/JS, works straight from GitHub Pages or
   any static file server
 

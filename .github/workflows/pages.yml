@@ -29,6 +29,13 @@ jobs:
         with:
           enablement: true
 
+      # sw.js must differ between deploys, otherwise the browser sees no update
+      # and offline visitors keep serving the previous precache.
+      - name: Stamp build version into service worker
+        run: |
+          grep -q "__BUILD_VERSION__" sw.js
+          sed -i "s/__BUILD_VERSION__/${GITHUB_SHA}/" sw.js
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

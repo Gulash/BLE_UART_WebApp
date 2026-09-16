@@ -25,6 +25,17 @@
   </header>
 
   <main class="app-main">
+    <div id="update-banner" class="update-banner" role="status" hidden>
+      <span class="update-banner__text">
+        A new version is available.
+        <span id="update-banner-note" class="update-banner__note" hidden>
+          Reloading disconnects the BLE device.
+        </span>
+      </span>
+      <button id="update-reload-btn" class="btn btn--primary" type="button">Reload</button>
+      <button id="update-dismiss-btn" class="btn btn--ghost" type="button">Later</button>
+    </div>
+
     <section class="controls">
       <button id="connect-btn" class="btn btn--primary" type="button">Connect</button>
       <button id="disconnect-btn" class="btn btn--danger" type="button" disabled>Disconnect</button>
