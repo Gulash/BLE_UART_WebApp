@@ -14,9 +14,10 @@ hardware.
 - Automatic profile detection: connects to NUS and HM-10 devices alike
 - Live terminal view of incoming data (notifications)
 - Send text/commands to the device, chunked to fit the default BLE ATT MTU
-- Optional timestamps and appended newline on send
-- Built-in demo sender: fires an incrementing message once per second to
-  exercise a link without typing, with a stop button
+- Optional timestamps, and a selectable line ending appended on send
+  (none, `\n`, `\r`, `\r\n` or `\n\r`)
+- Demo buttons: send the commands `demo` and `demo stop` to the device
+  without typing them
 - Autoscroll toggle and a one-click clear
 - Installable as a PWA (web app manifest + service worker), so it runs
   full-screen from the home screen and works offline

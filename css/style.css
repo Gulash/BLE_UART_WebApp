@@ -253,8 +253,29 @@ body {
   opacity: 0.5;
 }
 
-.newline-toggle {
+.line-ending {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   white-space: nowrap;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.line-ending select {
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  padding: 0.35rem 0.4rem;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.line-ending select:focus {
+  outline: none;
+  border-color: var(--accent-dim);
 }
 
 .support-warning {

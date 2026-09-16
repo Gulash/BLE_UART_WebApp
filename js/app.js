@@ -32,8 +32,19 @@ const PROFILES = [
 // leaving ~20 bytes of payload per write).
 const WRITE_CHUNK_SIZE = 20;
 
-// Interval between messages while the demo sender is running.
-const DEMO_INTERVAL_MS = 1000;
+// Commands the demo buttons send to the device.
+const DEMO_START_MESSAGE = "demo";
+const DEMO_STOP_MESSAGE = "demo stop";
+
+// Line endings appended to outgoing messages, keyed by the value of the
+// selector in the send form.
+const LINE_ENDINGS = {
+  none: "",
+  lf: "\n",
+  cr: "\r",
+  crlf: "\r\n",
+  lfcr: "\n\r",
+};
 
 const els = {
   connectBtn: document.getElementById("connect-btn"),
@@ -51,7 +62,7 @@ const els = {
   clearBtn: document.getElementById("clear-btn"),
   autoscrollToggle: document.getElementById("autoscroll-toggle"),
   timestampToggle: document.getElementById("timestamp-toggle"),
-  newlineToggle: document.getElementById("newline-toggle"),
+  lineEndingSelect: document.getElementById("line-ending-select"),
   supportWarning: document.getElementById("support-warning"),
 };
 
@@ -61,11 +72,6 @@ const state = {
   profile: null, // entry from PROFILES that matched the connected device
   writeChar: null, // web app -> device
   notifyChar: null, // device -> web app
-};
-
-const demoState = {
-  intervalId: null,
-  counter: 0,
 };
 
 const textEncoder = new TextEncoder();
@@ -83,8 +89,8 @@ function setConnectedUI(connected, deviceLabel) {
   els.disconnectBtn.disabled = !connected;
   els.sendInput.disabled = !connected;
   els.sendBtn.disabled = !connected;
-  els.demoStartBtn.disabled = !connected || demoState.intervalId !== null;
-  els.demoStopBtn.disabled = demoState.intervalId === null;
+  els.demoStartBtn.disabled = !connected;
+  els.demoStopBtn.disabled = !connected;
   els.deviceName.textContent = connected && deviceLabel ? deviceLabel : "";
   if (connected) {
     els.sendInput.focus();
@@ -117,12 +123,13 @@ function appendLine(text, kind) {
 }
 
 // Incoming notifications don't guarantee line boundaries, so we buffer
-// bytes and flush on newlines, keeping any partial line pending.
+// bytes and flush on newlines, keeping any partial line pending. Devices
+// terminate lines with any of the endings the send form offers.
 let rxBuffer = "";
 
 function handleIncomingChunk(chunk) {
   rxBuffer += chunk;
-  const lines = rxBuffer.split(/\r?\n/);
+  const lines = rxBuffer.split(/\r\n|\n\r|\r|\n/);
   rxBuffer = lines.pop(); // last element may be an incomplete line
   for (const line of lines) {
     if (line.length > 0) {
@@ -146,7 +153,6 @@ function onCharacteristicValueChanged(event) {
 
 function onDeviceDisconnected() {
   appendLine(`Disconnected from ${state.device ? state.device.name || "device" : "device"}.`, "sys");
-  stopDemo();
   flushRxBuffer();
   cleanupConnection();
   setConnectedUI(false);
@@ -252,7 +258,8 @@ async function disconnect() {
 async function sendText(text) {
   if (!state.writeChar) return;
 
-  const payload = els.newlineToggle.checked ? `${text}\n` : text;
+  const ending = LINE_ENDINGS[els.lineEndingSelect.value] ?? "";
+  const payload = `${text}${ending}`;
   const bytes = textEncoder.encode(payload);
 
   try {
@@ -274,35 +281,20 @@ function clearTerminal() {
   els.terminal.innerHTML = "";
 }
 
-function startDemo() {
-  if (demoState.intervalId !== null || !state.writeChar) return;
-
-  demoState.counter = 0;
-  appendLine("Demo started.", "sys");
-  demoState.intervalId = setInterval(() => {
-    demoState.counter += 1;
-    sendText(`Demo message #${demoState.counter}`);
-  }, DEMO_INTERVAL_MS);
-
-  els.demoStartBtn.disabled = true;
-  els.demoStopBtn.disabled = false;
+// The demo buttons are shortcuts for the two commands the device expects;
+// the device itself decides what to do with them.
+function sendDemoStart() {
+  sendText(DEMO_START_MESSAGE);
 }
 
-function stopDemo() {
-  if (demoState.intervalId === null) return;
-
-  clearInterval(demoState.intervalId);
-  demoState.intervalId = null;
-  appendLine("Demo stopped.", "sys");
-
-  els.demoStartBtn.disabled = !state.writeChar;
-  els.demoStopBtn.disabled = true;
+function sendDemoStop() {
+  sendText(DEMO_STOP_MESSAGE);
 }
 
 els.connectBtn.addEventListener("click", connect);
 els.disconnectBtn.addEventListener("click", disconnect);
-els.demoStartBtn.addEventListener("click", startDemo);
-els.demoStopBtn.addEventListener("click", stopDemo);
+els.demoStartBtn.addEventListener("click", sendDemoStart);
+els.demoStopBtn.addEventListener("click", sendDemoStop);
 els.clearBtn.addEventListener("click", clearTerminal);
 
 els.sendForm.addEventListener("submit", (event) => {

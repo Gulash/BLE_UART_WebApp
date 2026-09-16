@@ -43,8 +43,8 @@
           <input type="checkbox" id="timestamp-toggle" />
           Timestamps
         </label>
-        <button id="demo-start-btn" class="btn btn--ghost" type="button" disabled>Send demo</button>
-        <button id="demo-stop-btn" class="btn btn--ghost" type="button" disabled>Demo stop</button>
+        <button id="demo-start-btn" class="btn btn--ghost" type="button" title="Send the command &quot;demo&quot; to the device" disabled>Send demo</button>
+        <button id="demo-stop-btn" class="btn btn--ghost" type="button" title="Send the command &quot;demo stop&quot; to the device" disabled>Demo stop</button>
         <button id="clear-btn" class="btn btn--ghost" type="button">Clear</button>
       </div>
     </section>
@@ -61,9 +61,15 @@
         disabled
         aria-label="Message to send"
       />
-      <label class="checkbox newline-toggle">
-        <input type="checkbox" id="newline-toggle" checked />
-        \n
+      <label class="line-ending" title="Line ending appended to every message you send">
+        <span>End</span>
+        <select id="line-ending-select">
+          <option value="none">none</option>
+          <option value="lf" selected>\n</option>
+          <option value="cr">\r</option>
+          <option value="crlf">\r\n</option>
+          <option value="lfcr">\n\r</option>
+        </select>
       </label>
       <button id="send-btn" class="btn btn--primary" type="submit" disabled>Send</button>
     </form>
