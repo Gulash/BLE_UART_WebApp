@@ -7,11 +7,13 @@ const BUILD_VERSION = "__BUILD_VERSION__";
 
 const CACHE_NAME = `ble-uart-webapp-${BUILD_VERSION}`;
 
+// The versioned URLs must match the ones index.html requests, so that both
+// files are stamped from the same commit at deploy time.
 const PRECACHE_URLS = [
   "./",
   "index.html",
-  "css/style.css",
-  "js/app.js",
+  `css/style.css?v=${BUILD_VERSION}`,
+  `js/app.js?v=${BUILD_VERSION}`,
   "manifest.json",
   "icons/icon-192.png",
   "icons/icon-512.png",
@@ -51,8 +53,16 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Navigations skip the HTTP cache. An index.html a few minutes old paired
+  // with freshly fetched scripts is a version mismatch, and the page cannot
+  // recover from one on its own.
+  const networkRequest =
+    request.mode === "navigate"
+      ? new Request(request.url, { cache: "no-store", credentials: "same-origin" })
+      : request;
+
   event.respondWith(
-    fetch(request)
+    fetch(networkRequest)
       .then((response) => {
         if (response.ok) {
           const copy = response.clone();

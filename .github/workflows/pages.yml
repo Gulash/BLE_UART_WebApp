@@ -30,11 +30,14 @@ jobs:
           enablement: true
 
       # sw.js must differ between deploys, otherwise the browser sees no update
-      # and offline visitors keep serving the previous precache.
-      - name: Stamp build version into service worker
+      # and offline visitors keep serving the previous precache. index.html gets
+      # the same stamp on its asset URLs so a cached page cannot pull scripts
+      # from a different deploy.
+      - name: Stamp build version into service worker and page
         run: |
           grep -q "__BUILD_VERSION__" sw.js
-          sed -i "s/__BUILD_VERSION__/${GITHUB_SHA}/" sw.js
+          grep -q "__BUILD_VERSION__" index.html
+          sed -i "s/__BUILD_VERSION__/${GITHUB_SHA}/g" sw.js index.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

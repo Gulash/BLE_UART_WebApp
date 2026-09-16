@@ -105,7 +105,7 @@ function setConnectedUI(connected, deviceLabel) {
   els.demoStopBtn.disabled = !connected;
   els.deviceName.textContent = connected && deviceLabel ? deviceLabel : "";
   // The update banner warns about losing the link only while there is one.
-  els.updateBannerNote.hidden = !connected;
+  if (els.updateBannerNote) els.updateBannerNote.hidden = !connected;
   if (connected) {
     els.sendInput.focus();
   }
@@ -272,7 +272,9 @@ async function disconnect() {
 async function sendText(text) {
   if (!state.writeChar) return;
 
-  const ending = LINE_ENDINGS[els.lineEndingSelect.value] ?? "";
+  // Falls back to LF when the selector is missing, which happens while an
+  // index.html from an older deploy is still in play.
+  const ending = els.lineEndingSelect ? LINE_ENDINGS[els.lineEndingSelect.value] ?? "" : "\n";
   const payload = `${text}${ending}`;
   const bytes = textEncoder.encode(payload);
 
@@ -319,6 +321,7 @@ const updateState = {
 };
 
 function showUpdateBanner(worker) {
+  if (!els.updateBanner) return; // markup from before the update banner existed
   updateState.waitingWorker = worker;
   els.updateBannerNote.hidden = !isConnected();
   els.updateReloadBtn.disabled = false;
@@ -378,8 +381,28 @@ async function registerServiceWorker() {
   }
 }
 
-els.updateReloadBtn.addEventListener("click", applyUpdate);
-els.updateDismissBtn.addEventListener("click", dismissUpdate);
+// Wired up before anything else: should the rest of this file throw — an
+// index.html cached from an older deploy will not have every element this
+// script expects — the page must still end up with a service worker, because
+// that is what serves the next, matching version.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    // The first worker claiming this page fires this too — only a reload that
+    // the user asked for should go through, and only once.
+    if (!updateState.accepted || updateState.reloading) return;
+    updateState.reloading = true;
+    window.location.reload();
+  });
+
+  window.addEventListener("load", registerServiceWorker);
+}
+
+// Guarded for the same reason: older markup has no update banner, and a
+// missing button must not take the rest of the app down with it.
+if (els.updateReloadBtn && els.updateDismissBtn) {
+  els.updateReloadBtn.addEventListener("click", applyUpdate);
+  els.updateDismissBtn.addEventListener("click", dismissUpdate);
+}
 
 els.connectBtn.addEventListener("click", connect);
 els.disconnectBtn.addEventListener("click", disconnect);
@@ -398,16 +421,4 @@ els.sendForm.addEventListener("submit", (event) => {
 if (!supportsWebBluetooth()) {
   els.supportWarning.hidden = false;
   els.connectBtn.disabled = true;
-}
-
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    // The first worker claiming this page fires this too — only a reload that
-    // the user asked for should go through, and only once.
-    if (!updateState.accepted || updateState.reloading) return;
-    updateState.reloading = true;
-    window.location.reload();
-  });
-
-  window.addEventListener("load", registerServiceWorker);
 }
