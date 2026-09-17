@@ -83,7 +83,12 @@ const state = {
 };
 
 const textEncoder = new TextEncoder();
-const textDecoder = new TextDecoder();
+
+// Validates one candidate UTF-8 sequence at a time: it throws on anything
+// malformed, which is how decodeLine() tells text apart from raw bytes.
+// ignoreBOM keeps it a plain bytes-to-character mapping, so a leading U+FEFF
+// is reported like any other character instead of silently disappearing.
+const strictDecoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
 function supportsWebBluetooth() {
   return "bluetooth" in navigator;
@@ -118,6 +123,13 @@ function timestamp() {
 }
 
 function appendLine(text, kind) {
+  appendSegments([{ text }], kind);
+}
+
+// Segments are {text, escaped?} pairs. Escaped ones are byte escapes this app
+// produced, and are styled apart so they cannot be mistaken for a literal
+// "\xNN" the device sent as text.
+function appendSegments(segments, kind) {
   const line = document.createElement("span");
   line.className = `line line--${kind}`;
 
@@ -128,7 +140,17 @@ function appendLine(text, kind) {
     line.appendChild(ts);
   }
 
-  line.appendChild(document.createTextNode(text));
+  for (const segment of segments) {
+    if (segment.escaped) {
+      const span = document.createElement("span");
+      span.className = "esc";
+      span.textContent = segment.text;
+      line.appendChild(span);
+    } else {
+      line.appendChild(document.createTextNode(segment.text));
+    }
+  }
+
   els.terminal.appendChild(line);
 
   if (els.autoscrollToggle.checked) {
@@ -136,33 +158,121 @@ function appendLine(text, kind) {
   }
 }
 
-// Incoming notifications don't guarantee line boundaries, so we buffer
-// bytes and flush on newlines, keeping any partial line pending. Devices
-// terminate lines with any of the endings the send form offers.
-let rxBuffer = "";
+// Incoming notifications guarantee neither line boundaries nor character
+// boundaries: with ~20 bytes of payload per notification, a multi-byte UTF-8
+// sequence is regularly split across two of them. So we buffer raw bytes
+// rather than decoded text, cut lines at byte level and decode only whole
+// lines. Devices terminate lines with any of the endings the send form offers.
+let rxBuffer = new Uint8Array(0);
 
-function handleIncomingChunk(chunk) {
-  rxBuffer += chunk;
-  const lines = rxBuffer.split(/\r\n|\n\r|\r|\n/);
-  rxBuffer = lines.pop(); // last element may be an incomplete line
-  for (const line of lines) {
-    if (line.length > 0) {
-      appendLine(line, "rx");
+const CR = 0x0d;
+const LF = 0x0a;
+
+function concatBytes(head, tail) {
+  const merged = new Uint8Array(head.length + tail.length);
+  merged.set(head, 0);
+  merged.set(tail, head.length);
+  return merged;
+}
+
+// Length claimed by a UTF-8 lead byte, or 0 for a byte that cannot start a
+// sequence at all: a continuation byte, an overlong lead (0xC0, 0xC1) or one
+// beyond the last code point (0xF5 and up).
+function utf8SequenceLength(byte) {
+  if (byte < 0x80) return 1;
+  if (byte >= 0xc2 && byte <= 0xdf) return 2;
+  if (byte >= 0xe0 && byte <= 0xef) return 3;
+  if (byte >= 0xf0 && byte <= 0xf4) return 4;
+  return 0;
+}
+
+// Tab stays as it is because the terminal renders it as whitespace. The C0
+// controls, DEL and the C1 range have no glyph at all, so a font draws them
+// as an empty box or as nothing — and either way they are invisible once
+// copied out of the terminal.
+function isPrintable(codePoint) {
+  if (codePoint === 0x09) return true;
+  if (codePoint < 0x20 || codePoint === 0x7f) return false;
+  return !(codePoint >= 0x80 && codePoint <= 0x9f);
+}
+
+// Turns one line of raw bytes into display segments. Printable UTF-8 passes
+// through as text; every other byte — a control code, or a byte from a device
+// that speaks Latin-1 or sends binary — becomes a visible "\xNN" escape
+// instead of a glyph the font has to guess at.
+function decodeLine(bytes) {
+  const segments = [];
+  let text = "";
+  let escapes = "";
+
+  const flushText = () => {
+    if (text.length > 0) segments.push({ text });
+    text = "";
+  };
+  const flushEscapes = () => {
+    if (escapes.length > 0) segments.push({ text: escapes, escaped: true });
+    escapes = "";
+  };
+
+  for (let index = 0; index < bytes.length; ) {
+    const length = utf8SequenceLength(bytes[index]);
+    let decoded = null;
+
+    // A sequence running past the end of the line is truncated, not pending:
+    // the line break behind it means the device sent nothing more.
+    if (length > 0 && index + length <= bytes.length) {
+      try {
+        decoded = strictDecoder.decode(bytes.subarray(index, index + length));
+      } catch {
+        decoded = null; // not the sequence its lead byte promised
+      }
+    }
+
+    if (decoded !== null && isPrintable(decoded.codePointAt(0))) {
+      flushEscapes();
+      text += decoded;
+      index += length;
+    } else {
+      flushText();
+      escapes += `\\x${bytes[index].toString(16).toUpperCase().padStart(2, "0")}`;
+      index += 1;
     }
   }
+
+  flushText();
+  flushEscapes();
+  return segments;
+}
+
+function appendRxLine(bytes) {
+  appendSegments(decodeLine(bytes), "rx");
+}
+
+function handleIncomingChunk(bytes) {
+  rxBuffer = concatBytes(rxBuffer, bytes);
+
+  let start = 0;
+  for (let index = 0; index < rxBuffer.length; index++) {
+    if (rxBuffer[index] !== CR && rxBuffer[index] !== LF) continue;
+    // Empty lines are dropped, as they were before. That also disposes of the
+    // second byte of a CRLF pair, including one split across notifications.
+    if (index > start) appendRxLine(rxBuffer.subarray(start, index));
+    start = index + 1;
+  }
+
+  rxBuffer = rxBuffer.slice(start);
 }
 
 function flushRxBuffer() {
   if (rxBuffer.length > 0) {
-    appendLine(rxBuffer, "rx");
-    rxBuffer = "";
+    appendRxLine(rxBuffer);
+    rxBuffer = new Uint8Array(0);
   }
 }
 
 function onCharacteristicValueChanged(event) {
   const value = event.target.value; // DataView
-  const text = textDecoder.decode(value);
-  handleIncomingChunk(text);
+  handleIncomingChunk(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
 }
 
 function onDeviceDisconnected() {

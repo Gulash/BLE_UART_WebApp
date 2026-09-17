@@ -10,6 +10,7 @@
   --danger-dim: #b84343;
   --terminal-bg: #0a0c10;
   --terminal-text: #3ddc97;
+  --terminal-escape: #d9a441;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
@@ -218,6 +219,12 @@ body {
 .terminal .line--sys {
   color: var(--text-dim);
   font-style: italic;
+}
+
+/* Byte escapes the app printed in place of non-printable input. Tinted so a
+   "\xNN" it produced cannot be read as one the device sent as text. */
+.terminal .esc {
+  color: var(--terminal-escape);
 }
 
 .terminal .ts {

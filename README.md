@@ -13,6 +13,10 @@ hardware.
 
 - Automatic profile detection: connects to NUS and HM-10 devices alike
 - Live terminal view of incoming data (notifications)
+- UTF-8 is decoded across notification boundaries, so a character split
+  between two packets still arrives intact. Bytes that are not printable
+  text — control codes, binary, or a device that speaks Latin-1 rather
+  than UTF-8 — are shown as `\xNN` escapes instead of unreadable boxes
 - Send text/commands to the device, chunked to fit the default BLE ATT MTU
 - Optional timestamps, and a selectable line ending appended on send
   (none, `\n`, `\r`, `\r\n` or `\n\r`)
