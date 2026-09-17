@@ -36,32 +36,63 @@
       <button id="update-dismiss-btn" class="btn btn--ghost" type="button">Later</button>
     </div>
 
-    <section class="controls">
-      <button id="connect-btn" class="btn btn--primary" type="button">Connect</button>
-      <button id="disconnect-btn" class="btn btn--danger" type="button" disabled>Disconnect</button>
-      <label class="checkbox" title="List every nearby BLE device instead of filtering by service UUID — needed for HM-10 clones that do not advertise theirs.">
-        <input type="checkbox" id="all-devices-toggle" />
-        All devices
-      </label>
-      <span class="device-name" id="device-name"></span>
-
-      <div class="controls-right">
-        <label class="checkbox">
-          <input type="checkbox" id="autoscroll-toggle" checked />
-          Autoscroll
+    <section class="panel">
+      <h2 class="panel__title">Connection</h2>
+      <div class="panel__body">
+        <button id="connect-btn" class="btn btn--primary" type="button">Connect</button>
+        <button id="disconnect-btn" class="btn btn--danger" type="button" disabled>Disconnect</button>
+        <label class="checkbox" title="List every nearby BLE device instead of filtering by service UUID — needed for HM-10 clones that do not advertise theirs.">
+          <input type="checkbox" id="all-devices-toggle" />
+          All devices
         </label>
-        <label class="checkbox">
-          <input type="checkbox" id="timestamp-toggle" />
-          Timestamps
-        </label>
-        <button id="demo-start-btn" class="btn btn--ghost" type="button" title="Send the command &quot;demo&quot; to the device" disabled>Send demo</button>
-        <button id="demo-stop-btn" class="btn btn--ghost" type="button" title="Send the command &quot;demo stop&quot; to the device" disabled>Demo stop</button>
-        <button id="clear-btn" class="btn btn--ghost" type="button">Clear</button>
+        <span class="device-name" id="device-name"></span>
       </div>
     </section>
 
-    <section class="terminal-wrap">
-      <div id="terminal" class="terminal" role="log" aria-live="polite"></div>
+    <section class="panel">
+      <h2 class="panel__title">Quick commands</h2>
+      <!-- Every button here sends its data-send value verbatim; app.js wires
+           them all from that attribute, so a new shortcut is one more line. -->
+      <div class="quick-commands">
+        <button class="btn btn--ghost btn--cmd" type="button" data-send="demo" title="Send the command &quot;demo&quot;" disabled>demo</button>
+        <button class="btn btn--ghost btn--cmd" type="button" data-send="demo 1" title="Send the command &quot;demo 1&quot;" disabled>demo 1</button>
+        <button class="btn btn--ghost btn--cmd" type="button" data-send="demo 2" title="Send the command &quot;demo 2&quot;" disabled>demo 2</button>
+        <button class="btn btn--ghost btn--cmd" type="button" data-send="demo 3" title="Send the command &quot;demo 3&quot;" disabled>demo 3</button>
+        <button class="btn btn--ghost btn--cmd" type="button" data-send="demo 4" title="Send the command &quot;demo 4&quot;" disabled>demo 4</button>
+        <button class="btn btn--ghost btn--cmd btn--cmd-stop" type="button" data-send="demo stop" title="Send the command &quot;demo stop&quot;" disabled>demo stop</button>
+      </div>
+    </section>
+
+    <section id="terminal-panel" class="panel terminal-panel">
+      <div class="terminal-panel__header">
+        <button
+          id="terminal-toggle"
+          class="disclosure"
+          type="button"
+          aria-expanded="false"
+          aria-controls="terminal-body"
+        >
+          <span class="disclosure__caret" aria-hidden="true"></span>
+          <span class="disclosure__label">Terminal</span>
+        </button>
+        <span id="terminal-preview" class="terminal-preview" aria-hidden="true"></span>
+        <span id="terminal-unread" class="badge" hidden></span>
+        <button id="clear-btn" class="btn btn--ghost btn--sm" type="button">Clear</button>
+      </div>
+
+      <div id="terminal-body" class="terminal-body" hidden>
+        <div class="terminal-options">
+          <label class="checkbox">
+            <input type="checkbox" id="autoscroll-toggle" checked />
+            Autoscroll
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" id="timestamp-toggle" />
+            Timestamps
+          </label>
+        </div>
+        <div id="terminal" class="terminal" role="log" aria-live="polite"></div>
+      </div>
     </section>
 
     <form id="send-form" class="send-form" autocomplete="off">

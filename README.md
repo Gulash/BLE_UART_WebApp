@@ -23,8 +23,11 @@ hardware.
 - Send text/commands to the device, chunked to fit the default BLE ATT MTU
 - Optional timestamps, and a selectable line ending appended on send
   (none, `\n`, `\r`, `\r\n` or `\n\r`)
-- Demo buttons: send the commands `demo` and `demo stop` to the device
-  without typing them
+- Quick command buttons for `demo`, `demo 1` … `demo 4` and `demo stop`,
+  so the usual commands need no typing
+- Collapsible terminal, collapsed by default: the header keeps showing the
+  newest line and how many lines arrived while it was closed, so the page
+  stays short without hiding what the device is saying
 - Autoscroll toggle and a one-click clear
 - Installable as a PWA (web app manifest + service worker), so it runs
   full-screen from the home screen and works offline
@@ -45,9 +48,25 @@ Web Bluetooth is currently supported in Chromium-based browsers
 1. Open the app in a supported browser.
 2. Click **Connect** and pick your BLE UART device from the browser's
    device chooser.
-3. Incoming data from the device appears in the terminal in real time.
+3. Use the **Quick commands** buttons to fire off `demo`, `demo 1` …
+   `demo 4` or `demo stop` without typing.
 4. Type into the input field and press **Enter** (or click **Send**) to
    write to the device.
+5. Open **Terminal** to watch the traffic. It starts collapsed; its header
+   shows the newest line and a count of unseen lines, and your choice is
+   remembered for the next visit.
+
+### Adding your own quick commands
+
+Each button carries the text it sends in a `data-send` attribute, and
+`js/app.js` wires up every element that has one. A new shortcut is therefore
+one line in `index.html`:
+
+```html
+<button class="btn btn--ghost btn--cmd" type="button" data-send="status" disabled>status</button>
+```
+
+The `disabled` attribute is what the app toggles on connect, so keep it.
 
 ## Installing on a phone
 

@@ -44,9 +44,14 @@ const MAX_LINE_BYTES = 1024;
 // ever grows eventually takes the tab down with it. Oldest lines go first.
 const MAX_TERMINAL_LINES = 2000;
 
-// Commands the demo buttons send to the device.
-const DEMO_START_MESSAGE = "demo";
-const DEMO_STOP_MESSAGE = "demo stop";
+// Longest preview of the newest line kept for the collapsed terminal header.
+// CSS cuts it to whatever fits; this only keeps a flood of bytes out of the DOM.
+const MAX_PREVIEW_CHARS = 200;
+
+// Where the collapsed/expanded choice is remembered. Absent a stored choice
+// the terminal starts collapsed: it is the tallest thing on the page, and a
+// session that only fires off quick commands never needs it open.
+const TERMINAL_OPEN_KEY = "ble-uart-webapp:terminal-open";
 
 // How often the page asks the browser to re-check sw.js. Browsers only look
 // for a new worker on navigation, and this app can stay open for days.
@@ -72,10 +77,16 @@ const els = {
   sendForm: document.getElementById("send-form"),
   sendInput: document.getElementById("send-input"),
   sendBtn: document.getElementById("send-btn"),
-  demoStartBtn: document.getElementById("demo-start-btn"),
-  demoStopBtn: document.getElementById("demo-stop-btn"),
+  // Quick command buttons carry the text they send in data-send, so the set
+  // of shortcuts lives in index.html alone.
+  sendButtons: document.querySelectorAll("[data-send]"),
   allDevicesToggle: document.getElementById("all-devices-toggle"),
   clearBtn: document.getElementById("clear-btn"),
+  terminalPanel: document.getElementById("terminal-panel"),
+  terminalToggle: document.getElementById("terminal-toggle"),
+  terminalBody: document.getElementById("terminal-body"),
+  terminalPreview: document.getElementById("terminal-preview"),
+  terminalUnread: document.getElementById("terminal-unread"),
   autoscrollToggle: document.getElementById("autoscroll-toggle"),
   timestampToggle: document.getElementById("timestamp-toggle"),
   lineEndingSelect: document.getElementById("line-ending-select"),
@@ -118,8 +129,9 @@ function setConnectedUI(connected, deviceLabel) {
   els.disconnectBtn.disabled = !connected;
   els.sendInput.disabled = !connected;
   els.sendBtn.disabled = !connected;
-  els.demoStartBtn.disabled = !connected;
-  els.demoStopBtn.disabled = !connected;
+  for (const button of els.sendButtons) {
+    button.disabled = !connected;
+  }
   els.deviceName.textContent = connected && deviceLabel ? deviceLabel : "";
   // The update banner warns about losing the link only while there is one.
   if (els.updateBannerNote) els.updateBannerNote.hidden = !connected;
@@ -134,14 +146,76 @@ function timestamp() {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
 }
 
+// --- Collapsible terminal ---------------------------------------------------
+//
+// The terminal is collapsed by default, so its header has to stand in for it:
+// it carries the newest line and a count of the lines that arrived since it
+// was collapsed. Without that, a "Connection failed…" would land in a panel
+// nobody is looking at.
+
+let terminalOpen = false;
+let unreadLines = 0;
+let previewText = "";
+
+function renderTerminalSummary() {
+  if (!els.terminalPreview || !els.terminalUnread) return;
+  els.terminalPreview.textContent = terminalOpen ? "" : previewText;
+  els.terminalUnread.textContent = `${unreadLines} new`;
+  els.terminalUnread.hidden = terminalOpen || unreadLines === 0;
+}
+
+// The pending line is re-rendered on every notification, so it may refresh the
+// preview but must never add to the count — it is the same line each time.
+function noteTerminalLine(line, pending) {
+  previewText = line.textContent.slice(0, MAX_PREVIEW_CHARS);
+  if (!pending && !terminalOpen) unreadLines += 1;
+  renderTerminalSummary();
+}
+
+function readStoredTerminalOpen() {
+  try {
+    return window.localStorage.getItem(TERMINAL_OPEN_KEY) === "1";
+  } catch {
+    return false; // storage blocked — fall back to the default
+  }
+}
+
+function storeTerminalOpen(open) {
+  try {
+    window.localStorage.setItem(TERMINAL_OPEN_KEY, open ? "1" : "0");
+  } catch {
+    // Not remembering the choice is not worth reporting.
+  }
+}
+
+function setTerminalOpen(open, persist = true) {
+  terminalOpen = open;
+  els.terminalBody.hidden = !open;
+  els.terminalPanel.classList.toggle("is-open", open);
+  els.terminalToggle.setAttribute("aria-expanded", open ? "true" : "false");
+
+  if (open) {
+    unreadLines = 0;
+    // A hidden element has no scroll height, so every line that arrived while
+    // it was collapsed left scrollTop at 0. Jump to the end on the way out.
+    if (els.autoscrollToggle.checked) {
+      els.terminal.scrollTop = els.terminal.scrollHeight;
+    }
+  }
+
+  renderTerminalSummary();
+  if (persist) storeTerminalOpen(open);
+}
+
 function appendLine(text, kind) {
   appendSegments([{ text }], kind);
 }
 
 // Segments are {text, escaped?} pairs. Escaped ones are byte escapes this app
 // produced, and are styled apart so they cannot be mistaken for a literal
-// "\xNN" the device sent as text.
-function appendSegments(segments, kind) {
+// "\xNN" the device sent as text. A pending line is one still arriving, which
+// only the collapsed-header summary needs to tell apart.
+function appendSegments(segments, kind, pending = false) {
   const line = document.createElement("span");
   line.className = `line line--${kind}`;
 
@@ -173,6 +247,7 @@ function appendSegments(segments, kind) {
     els.terminal.scrollTop = els.terminal.scrollHeight;
   }
 
+  noteTerminalLine(line, pending);
   return line;
 }
 
@@ -282,7 +357,7 @@ function dropPendingLine() {
 
 function renderPendingLine() {
   if (rxBuffer.length === 0) return;
-  pendingLine = appendSegments(decodeLine(rxBuffer), "rx");
+  pendingLine = appendSegments(decodeLine(rxBuffer), "rx", true);
   pendingLine.classList.add("line--pending");
 }
 
@@ -460,16 +535,9 @@ function clearTerminal() {
   // rxBuffer keeps its bytes — they are the head of a line still arriving,
   // and dropping them would corrupt it. Only the element is gone.
   pendingLine = null;
-}
-
-// The demo buttons are shortcuts for the two commands the device expects;
-// the device itself decides what to do with them.
-function sendDemoStart() {
-  sendText(DEMO_START_MESSAGE);
-}
-
-function sendDemoStop() {
-  sendText(DEMO_STOP_MESSAGE);
+  previewText = "";
+  unreadLines = 0;
+  renderTerminalSummary();
 }
 
 // --- Service worker updates -------------------------------------------------
@@ -571,9 +639,19 @@ if (els.updateReloadBtn && els.updateDismissBtn) {
 
 els.connectBtn.addEventListener("click", connect);
 els.disconnectBtn.addEventListener("click", disconnect);
-els.demoStartBtn.addEventListener("click", sendDemoStart);
-els.demoStopBtn.addEventListener("click", sendDemoStop);
 els.clearBtn.addEventListener("click", clearTerminal);
+
+for (const button of els.sendButtons) {
+  button.addEventListener("click", () => sendText(button.dataset.send));
+}
+
+// Guarded like the update banner: markup cached from an older deploy has no
+// terminal panel, and a missing element must not take the rest of the app down.
+if (els.terminalPanel && els.terminalToggle && els.terminalBody) {
+  els.terminalToggle.addEventListener("click", () => setTerminalOpen(!terminalOpen));
+  // Applied without persisting: this only replays the stored choice.
+  setTerminalOpen(readStoredTerminalOpen(), false);
+}
 
 els.sendForm.addEventListener("submit", (event) => {
   event.preventDefault();
