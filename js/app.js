@@ -32,6 +32,18 @@ const PROFILES = [
 // leaving ~20 bytes of payload per write).
 const WRITE_CHUNK_SIZE = 20;
 
+// Hard limit on a line the device never terminates. A floating UART input
+// reads an endless run of NUL bytes and no line break ever arrives, which
+// would grow rxBuffer without bound and make every notification re-render an
+// ever longer pending line — quadratic work for as long as the flood lasts.
+// The limit caps that per-notification cost; 1024 keeps a wide margin over
+// what BLE can actually deliver while still being a generous line.
+const MAX_LINE_BYTES = 1024;
+
+// Hard limit on the scrollback, for the same reason: a terminal that only
+// ever grows eventually takes the tab down with it. Oldest lines go first.
+const MAX_TERMINAL_LINES = 2000;
+
 // Commands the demo buttons send to the device.
 const DEMO_START_MESSAGE = "demo";
 const DEMO_STOP_MESSAGE = "demo stop";
@@ -152,6 +164,10 @@ function appendSegments(segments, kind) {
   }
 
   els.terminal.appendChild(line);
+
+  while (els.terminal.children.length > MAX_TERMINAL_LINES) {
+    els.terminal.removeChild(els.terminal.children[0]);
+  }
 
   if (els.autoscrollToggle.checked) {
     els.terminal.scrollTop = els.terminal.scrollHeight;
@@ -286,6 +302,13 @@ function handleIncomingChunk(bytes) {
   }
 
   rxBuffer = rxBuffer.slice(start);
+
+  // Break into a device that is not sending any breaks of its own.
+  while (rxBuffer.length > MAX_LINE_BYTES) {
+    appendRxLine(rxBuffer.subarray(0, MAX_LINE_BYTES));
+    rxBuffer = rxBuffer.slice(MAX_LINE_BYTES);
+  }
+
   renderPendingLine();
 }
 
