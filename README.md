@@ -9,6 +9,13 @@ hardware.
 
 **Live demo:** https://gulash.github.io/BLE_UART_WebApp/
 
+<a href="https://gulash.github.io/BLE_UART_WebApp/">
+  <img src="qr-code.png" alt="QR code for https://gulash.github.io/BLE_UART_WebApp/" width="180" height="180">
+</a>
+
+Scan the code with your phone's camera to open the app straight away — on
+Android it can then be installed to the home screen from Chrome's menu.
+
 ## Features
 
 - Automatic profile detection: connects to NUS and HM-10 devices alike
@@ -130,6 +137,7 @@ secure context, so it works without HTTPS locally.
 ├── manifest.json                # PWA manifest
 ├── sw.js                        # service worker (network-first, offline fallback)
 ├── icons/                       # PWA / home screen icons
+├── qr-code.png                  # QR code for the live URL (README preview)
 └── .github/workflows/pages.yml  # GitHub Pages deployment
 ```
 
