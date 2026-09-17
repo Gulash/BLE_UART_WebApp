@@ -221,6 +221,20 @@ body {
   font-style: italic;
 }
 
+/* A line the device has not terminated yet: an interactive prompt, or the
+   head of a line still arriving. The caret marks where the next byte lands,
+   and is drawn rather than typed so no font can turn it into a box. */
+.terminal .line--pending::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  margin-left: 1px;
+  background: currentColor;
+  opacity: 0.4;
+  vertical-align: text-bottom;
+}
+
 /* Byte escapes the app printed in place of non-printable input. Tinted so a
    "\xNN" it produced cannot be read as one the device sent as text. */
 .terminal .esc {

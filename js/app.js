@@ -156,6 +156,8 @@ function appendSegments(segments, kind) {
   if (els.autoscrollToggle.checked) {
     els.terminal.scrollTop = els.terminal.scrollHeight;
   }
+
+  return line;
 }
 
 // Incoming notifications guarantee neither line boundaries nor character
@@ -248,7 +250,30 @@ function appendRxLine(bytes) {
   appendSegments(decodeLine(bytes), "rx");
 }
 
+// Whatever sits in rxBuffer after the last line break is shown right away as
+// an unterminated line instead of being held back until its newline arrives.
+// A device with an interactive prompt never terminates the prompt, so holding
+// it back meant it stayed invisible and then surfaced glued to the front of
+// the next burst of output — making the burst look reordered.
+let pendingLine = null;
+
+function dropPendingLine() {
+  if (pendingLine) {
+    pendingLine.remove();
+    pendingLine = null;
+  }
+}
+
+function renderPendingLine() {
+  if (rxBuffer.length === 0) return;
+  pendingLine = appendSegments(decodeLine(rxBuffer), "rx");
+  pendingLine.classList.add("line--pending");
+}
+
 function handleIncomingChunk(bytes) {
+  // The pending line is always the terminal's last child, so it has to go
+  // before completed lines are appended behind it.
+  dropPendingLine();
   rxBuffer = concatBytes(rxBuffer, bytes);
 
   let start = 0;
@@ -261,9 +286,13 @@ function handleIncomingChunk(bytes) {
   }
 
   rxBuffer = rxBuffer.slice(start);
+  renderPendingLine();
 }
 
+// Turns the pending line into a permanent one: nothing more is coming that
+// could complete it.
 function flushRxBuffer() {
+  dropPendingLine();
   if (rxBuffer.length > 0) {
     appendRxLine(rxBuffer);
     rxBuffer = new Uint8Array(0);
@@ -276,8 +305,8 @@ function onCharacteristicValueChanged(event) {
 }
 
 function onDeviceDisconnected() {
-  appendLine(`Disconnected from ${state.device ? state.device.name || "device" : "device"}.`, "sys");
   flushRxBuffer();
+  appendLine(`Disconnected from ${state.device ? state.device.name || "device" : "device"}.`, "sys");
   cleanupConnection();
   setConnectedUI(false);
 }
@@ -405,6 +434,9 @@ async function sendText(text) {
 
 function clearTerminal() {
   els.terminal.innerHTML = "";
+  // rxBuffer keeps its bytes — they are the head of a line still arriving,
+  // and dropping them would corrupt it. Only the element is gone.
+  pendingLine = null;
 }
 
 // The demo buttons are shortcuts for the two commands the device expects;

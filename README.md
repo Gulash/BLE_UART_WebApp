@@ -17,6 +17,9 @@ hardware.
   between two packets still arrives intact. Bytes that are not printable
   text — control codes, binary, or a device that speaks Latin-1 rather
   than UTF-8 — are shown as `\xNN` escapes instead of unreadable boxes
+- A line the device has not terminated yet is shown as it arrives, marked
+  with a caret, so an interactive prompt like `> ` appears straight away
+  instead of surfacing later glued to the front of the next output
 - Send text/commands to the device, chunked to fit the default BLE ATT MTU
 - Optional timestamps, and a selectable line ending appended on send
   (none, `\n`, `\r`, `\r\n` or `\n\r`)
