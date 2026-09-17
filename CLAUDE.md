@@ -13,10 +13,17 @@ feature branch deploys nothing, so:
 - No new `sw.js` reaches any browser, so the in-app "A new version is
   available / Reload" banner never appears.
 
-So a change is not finished when the branch is pushed. **After pushing a
-feature branch, say plainly that the change is not live yet and ask whether to
-open a pull request against `main`** (or whether the user merges it
-themselves). Never push straight to `main` without being asked to.
+So a change is not finished when the branch is pushed. The user has asked for
+the deploy to happen without being prompted every time: **once a change is
+committed and verified, fast-forward `main` onto it** (`git push origin
+<branch>:main`), then confirm the workflow run succeeded. Check
+`git merge-base --is-ancestor origin/main <branch>` first — if `main` has moved
+on and a fast-forward is not possible, stop and ask instead of forcing.
+
+This environment's egress proxy blocks `gulash.github.io`, so the live URL
+cannot be fetched from here. Verify a deploy through the GitHub Actions API
+(the run and its "Deploy to GitHub Pages" step) and leave the browser-side
+check to the user — never report the live site itself as verified.
 
 After a deploy, the update banner still only shows in a browser that has
 visited the app before — it needs an existing service worker as controller.
@@ -39,6 +46,10 @@ browser sees no update and offline visitors keep the old precache forever.
 - Quick command buttons carry the text they send in `data-send`; `app.js`
   wires up every element that has one. A new shortcut is one line in
   `index.html` and no JS change.
+- Connecting moves focus to the first quick command, never to the text input:
+  the input raises the on-screen keyboard on a phone before anyone asked to
+  type. Focus moved programmatically after a mouse click does not satisfy
+  `:focus-visible`, which is why `.btn--cmd` also styles plain `:focus`.
 - BLE profiles live in `PROFILES` at the top of `js/app.js`; another module is
   one more entry.
 - Incoming data is buffered as raw bytes, never as decoded text — a UTF-8

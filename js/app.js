@@ -136,7 +136,16 @@ function setConnectedUI(connected, deviceLabel) {
   // The update banner warns about losing the link only while there is one.
   if (els.updateBannerNote) els.updateBannerNote.hidden = !connected;
   if (connected) {
-    els.sendInput.focus();
+    // Land on the first quick command rather than the text input. The input
+    // pulls up the on-screen keyboard on a phone before anyone asked to type,
+    // and a session usually starts by pressing a command anyway. Falls back to
+    // the input when a page from an older deploy has no quick commands.
+    const firstCommand = els.sendButtons[0];
+    if (firstCommand) {
+      firstCommand.focus();
+    } else {
+      els.sendInput.focus();
+    }
   }
 }
 

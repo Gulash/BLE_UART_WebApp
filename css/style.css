@@ -213,6 +213,19 @@ body {
   color: var(--danger);
 }
 
+/* Keyboard focus has to be visible, and the quick commands need more than
+   :focus-visible: the app moves focus onto the first one after connecting, and
+   a programmatic focus following a mouse click does not satisfy :focus-visible
+   — the ring would simply not be drawn. The text input and the selector mark
+   focus with their border instead, so they are left out here. */
+.btn:focus-visible,
+.disclosure:focus-visible,
+.checkbox input:focus-visible,
+.btn--cmd:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .checkbox {
   display: flex;
   align-items: center;
